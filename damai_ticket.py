@@ -84,12 +84,22 @@ class Concert(object):
                  "profile.managed_default_content_settings.javascript": 1,
                  'permissions.default.stylesheet': 2}
         options.add_experimental_option("prefs", prefs)
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+
 
         # 更换等待策略为不等待浏览器加载完全就进行下一步操作
         capa = DesiredCapabilities.CHROME
         capa["pageLoadStrategy"] = "none"
 
         self.driver = webdriver.Chrome(options=options, desired_capabilities=capa)
+        self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": """
+            Object.defineProperty(navigator, 'webdriver', {
+              get: () => undefined
+            })
+            """
+        })
         self.login()
         self.driver.refresh()
         try:
@@ -105,21 +115,21 @@ class Concert(object):
 
     def choose_ticket(self):
         print(u"###进入抢票界面###")
-        while self.driver.title.find('确认订单') == -1:  # 如果跳转到了确认界面就算这步成功了，否则继续执行此步
+        while self.driver.title.find('订单确认页') == -1:  # 如果跳转到了确认界面就算这步成功了，否则继续执行此步
             self.num += 1
 
-            if con.driver.current_url.find("buy.damai.cn") != -1:
+            if con.driver.current_url.find("m.damai.cn") != -1:
                 break
 
             # 确认页面刷新成功
             try:
                 #box = self.driver.find_element_by_class_name('perform__order__box')
-                box = WebDriverWait(self.driver, 1, 0.1).until(EC.presence_of_element_located((By.CLASS_NAME, 'perform__order__box')))
+                box = WebDriverWait(self.driver, 3600, 0.1).until(EC.presence_of_element_located((By.CLASS_NAME, 'perform__order__box')))
             except:
                 raise Exception(u"***Error: 页面刷新出错***")
 
             try:
-                buybutton = box.find_element_by_class_name('buybtn')
+                buybutton = box.find_element_by_class_name('buy-link')
                 buybutton_text = buybutton.text
             except:
                 raise Exception(u"***Error: buybutton 位置找不到***")
@@ -185,7 +195,7 @@ class Concert(object):
                 buybutton.click()
                 self.status = 3
 
-            elif buybutton_text == "立即购买":
+            elif buybutton_text == "不，立即购买":
                 for i in range(self.ticket_num-1):  # 设置增加票数
                     ticket_num_up.click()
                 buybutton.click()
@@ -196,21 +206,21 @@ class Concert(object):
             if self.real_name is not None:
                 print(u"###等待--确认订单--页面出现，可自行刷新，若长期不跳转可选择-- CRTL+C --重新抢票###")
                 try:
-                    tb = WebDriverWait(self.driver, 3600, 0.1).until(EC.presence_of_element_located((By.XPATH, '/html/body/div[2]/div[2]/div/div[2]/div[2]/div[1]')))
+                    tb = WebDriverWait(self.driver, 3600, 0.1).until(EC.presence_of_element_located((By.XPATH, '//*[@id="dmViewerBlock_DmViewerBlock"]/div[2]/div')))
                 except:
                     raise Exception(u"***Error：实名信息选择框没有显示***")
                 print(u'###开始确认订单###')
                 print(u'###选择购票人信息,可手动帮助点击###')
                 init_sleeptime = 0.0
-                Labels = tb.find_elements_by_tag_name('label')
+                Labels = tb.find_elements_by_tag_name('div')
 
                 # 防止点击过快导致没有选择多个人
                 while True:
                     init_sleeptime += 0.1
                     true_num = 0
                     for num_people in self.real_name:
-                        tag_input = Labels[num_people-1].find_element_by_tag_name('input')
-                        if tag_input.get_attribute('aria-checked') == 'false':
+                        tag_input = Labels[num_people-1].find_element_by_tag_name('i')
+                        if tag_input.get_attribute('class') == 'iconfont icondanxuan-weixuan_':
                             sleep(init_sleeptime)
                             tag_input.click()
                         else:
@@ -218,10 +228,10 @@ class Concert(object):
                     if true_num == len(self.real_name):
                         break
                 print("本次抢票时间：", time()-self.time_start)
-                self.driver.find_element_by_xpath('/html/body/div[2]/div[2]/div/div[9]/button').click() # 同意以上协议并提交订单
+                self.driver.find_element_by_xpath('//*[@id="dmOrderSubmitBlock_DmOrderSubmitBlock"]/div[2]/div/div[2]/div[3]/div[2]').click() # 同意以上协议并提交订单
 
             else:
-                self.driver.find_element_by_xpath('/html/body/div[2]/div[2]/div/div[8]/button').click()
+                self.driver.find_element_by_xpath('//*[@id="dmOrderSubmitBlock_DmOrderSubmitBlock"]/div[2]/div/div[2]/div[3]/div[2]').click()
 
             # 判断title是不是支付宝
             print(u"###等待跳转到--付款界面--，可自行刷新，若长期不跳转可选择-- CRTL+C --重新抢票###")
